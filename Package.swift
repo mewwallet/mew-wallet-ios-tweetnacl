@@ -1,20 +1,20 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.5
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
-  name: "MEWwalletTweetNacl",
+  name: "mew-wallet-ios-tweetnacl",
   products: [
     .library(
-      name: "MEWwalletTweetNacl",
-      targets: ["MEWwalletTweetNacl"]),
+      name: "mew-wallet-ios-tweetnacl",
+      targets: ["mew-wallet-ios-tweetnacl"]),
   ],
   dependencies: [
   ],
   targets: [
     .target(
-      name: "MEWwalletCTweetNacl",
+      name: "tweetnacl-lib",
       dependencies: [],
       path: "tweetnacl",
       exclude: [
@@ -29,10 +29,10 @@ let package = Package(
       publicHeadersPath: "include"
     ),
     .target(
-      name: "MEWwalletTweetNacl",
-      dependencies: ["MEWwalletCTweetNacl"]),
+      name: "mew-wallet-ios-tweetnacl",
+      dependencies: ["tweetnacl-lib"]),
     .testTarget(
-      name: "MEWwalletTweetNaclTests",
-      dependencies: ["MEWwalletTweetNacl"]),
+      name: "mew-wallet-ios-tweetnacl-tests",
+      dependencies: ["mew-wallet-ios-tweetnacl"]),
   ]
 )

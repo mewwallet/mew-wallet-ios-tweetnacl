@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import MEWwalletCTweetNacl
+import tweetnacl_lib
 
 struct Constants {
   static let PublicKeyLength = 32

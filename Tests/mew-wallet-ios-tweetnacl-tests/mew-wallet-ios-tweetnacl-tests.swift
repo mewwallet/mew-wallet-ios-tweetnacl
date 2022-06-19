@@ -1,7 +1,7 @@
 import XCTest
-@testable import MEWwalletTweetNacl
+@testable import mew_wallet_ios_tweetnacl
 
-final class MEWwalletTweetNaclTests: XCTestCase {
+final class mew_wallet_ios_tweetnacl_tests: XCTestCase {
   let nonce = "1dvWO7uOnBnO7iNDJ9kO9pTasLuKNlej"
   let ephemPublicKey = "FBH1/pAEHOOW14Lu3FWkgV3qOEcuL78Zy+qW1RwzMXQ="
   let cipherText = "f8kBcl/NCyf3sybfbwAKk/np2Bzt9lRVkZejr6uh5FgnNlH/ic62DZzy"
