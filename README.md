@@ -19,6 +19,3 @@ You can use [Swift Package Manager](https://swift.org/package-manager/) and spec
 _Nothing has changed except package name:_
 
 `import MEWwalletTweetNacl` -> `import mew-wallet-ios-tweetnacl`
-
-### License
-MIT
