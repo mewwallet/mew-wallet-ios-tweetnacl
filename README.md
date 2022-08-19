@@ -5,7 +5,7 @@
 - Good mood
 - Xcode 13.0 or above (Swift 5.5)
 
-### Migration from [MyEtherWallet/mew-wallet-ios-tweetnacl](https://github.com/mewwallet/mew-wallet-ios-tweetnacl)
+### Migration from [MyEtherWallet/mew-wallet-ios-tweetnacl](https://github.com/myetherwallet/mew-wallet-ios-tweetnacl)
 
 _Nothing has changed except package name:_
 
