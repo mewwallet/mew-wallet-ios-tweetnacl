@@ -14,11 +14,18 @@ struct Constants {
   static let SecretKeyLength = 32
   static let BeforeNMLength = 32
   
-  struct SecretBox {
+  enum SecretBox {
     static let keyLength = 32
     static let nonceLength = 24
     static let zeroLength = 32
     static let boxZeroLength = 16
+  }
+  
+  enum Sign {
+    static let signatureLength = 64
+    static let publicKeyLength = 32
+    static let secretKeyLength = 64
+    static let seedLength = 32
   }
 }
 
@@ -27,6 +34,7 @@ public enum TweetNaclError: LocalizedError {
   case invalidPublicKey
   case invalidKey
   case invalidNonce
+  case invalidSeed
   case tweetNacl(String)
   
   public var errorDescription: String? {
@@ -35,6 +43,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey: return "Wrong PublicKey length"
     case .invalidKey:       return "Wrong Key length"
     case .invalidNonce:     return "Wrong Nonce length"
+    case .invalidSeed:      return "Wrong Seed length"
     case .tweetNacl:        return "Internal TweetNacl error"
     }
   }
@@ -45,6 +54,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey:       return "PublicKey should be \(Constants.PublicKeyLength) bytes length"
     case .invalidKey:             return "Key should be \(Constants.SecretBox.keyLength) bytes length"
     case .invalidNonce:           return "Nonce should be \(Constants.SecretBox.nonceLength) bytes length"
+    case .invalidSeed:            return "Seed should be \(Constants.Sign.seedLength) bytes length"
     case let .tweetNacl(message): return "TweetNacl error: \(message)"
     }
   }
@@ -55,6 +65,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey: return "Check PublicKey length"
     case .invalidKey:       return "Check Key length"
     case .invalidNonce:     return "Check Nonce length"
+    case .invalidSeed:      return "Check Seed length"
     case .tweetNacl:        return "Internal TweetNacl error"
     }
   }
@@ -90,6 +101,23 @@ public class TweetNacl {
     var pk = [UInt8](repeating: 0, count: Constants.PublicKeyLength)
     let result = crypto_scalarmult_curve25519_tweet_base(&pk, &sk)
     guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.keyPair] Internal error code: \(result)") }
+    return (Data(pk), Data(sk))
+  }
+  
+  public static func signKeyPair(seed: Data) throws -> (publicKey: Data, secretKey: Data) {
+    guard seed.count == Constants.Sign.seedLength else {
+      throw TweetNaclError.invalidSeed
+    }
+    var sk: [UInt8] = [UInt8](repeating: 0, count: Constants.Sign.secretKeyLength)
+    var pk: [UInt8] = [UInt8](repeating: 0, count: Constants.Sign.publicKeyLength)
+    
+    sk.replaceSubrange(0..<Constants.Sign.publicKeyLength, with: seed[0..<Constants.Sign.publicKeyLength])
+    
+    let result = crypto_sign_ed25519_tweet_keypair(&pk, &sk)
+    guard result == 0 else {
+      throw TweetNaclError.tweetNacl("Internal error")
+    }
+    
     return (Data(pk), Data(sk))
   }
     
