@@ -203,6 +203,52 @@ public class TweetNacl {
       return Data(signedMessage)
     }
   }
+  
+  /// Verifies a message using the Ed25519 signature scheme.
+  /// 
+  /// This method uses the TweetNaCl implementation (`crypto_sign_ed25519_tweet_open`)
+  /// to verify a detached Ed25519 signature against the provided message and public key.
+  /// 
+  /// The verification succeeds if:
+  /// - The signature length is exactly `Constants.Sign.signatureLength` bytes.
+  /// - The public key length is exactly `Constants.Sign.publicKeyLength` bytes.
+  /// - `crypto_sign_ed25519_tweet_open` successfully recovers the original message from the
+  ///   concatenated signature and message bytes.
+  /// - The recovered message exactly matches the provided message.
+  /// 
+  /// - Parameters:
+  ///   - message: The message data to verify.
+  ///   - signature: The Ed25519 signature to verify (`Constants.Sign.signatureLength` bytes).
+  ///   - publicKey: The Ed25519 public key associated with the signature
+  ///                (`Constants.Sign.publicKeyLength` bytes).
+  /// 
+  /// - Returns: `true` if the signature is valid for the given message and public key; otherwise, `false`.
+  /// 
+  /// - Note:
+  ///   This function expects a *detached* Ed25519 signature (signature and message are provided separately),
+  ///   but internally uses `crypto_sign_ed25519_tweet_open`, which operates on a
+  ///   "signature || message" concatenation, to perform the verification.
+  public static func verify(message: Data, signature: Data, publicKey: Data) -> Bool {
+    guard signature.count == Constants.Sign.signatureLength,
+          publicKey.count == Constants.Sign.publicKeyLength else { return false }
+    
+    var publicKey = [UInt8](publicKey)
+    let message = [UInt8](message)
+    let signature = [UInt8](signature)
+    
+    // signature || message
+    var signedMessage = signature + message
+    
+    // recovered must be at least signedMessage.count bytes
+    var recovered = [UInt8](repeating: 0, count: signedMessage.count)
+    var length: UInt64 = 0
+    
+    let result = crypto_sign_ed25519_tweet_open(&recovered, &length, &signedMessage, UInt64(signedMessage.count), &publicKey)
+    
+    // Valid if open() returns 0 AND recovered message matches input
+    guard result == 0, Int(length) == message.count else { return false }
+    return recovered.prefix(Int(length)).elementsEqual(message)
+  }
     
   // MARK: - Decryption
     
