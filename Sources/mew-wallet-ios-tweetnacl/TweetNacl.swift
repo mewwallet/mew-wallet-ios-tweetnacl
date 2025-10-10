@@ -75,7 +75,6 @@ public enum TweetNaclError: LocalizedError {
   }
 }
 
-// Based on https://github.com/dchest/tweetnacl-js
 public class TweetNacl {
   
   // MARK: - Keys
@@ -329,6 +328,19 @@ public class TweetNacl {
     guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.secretbox] Internal error code: \(result)") }
     
     return Data(c[Constants.SecretBox.boxZeroLength..<c.count])
+  }
+  
+  /// Checks that Ed25519 public key encodes a valid point on Edwards25519.
+  /// Returns `true` iff the 32-byte key decodes successfully.
+  /// - Parameter publicKey: The Ed25519 public key
+  /// - Returns: `true` if the key is on curve; otherwise, `false`.
+  public static func isOnCurve(publicKey: Data) throws -> Bool {
+    guard publicKey.count == Constants.Sign.publicKeyLength else { throw TweetNaclError.invalidKey }
+    return publicKey.withUnsafeBytes { rawPtr -> Bool in
+      let p = rawPtr.bindMemory(to: UInt8.self).baseAddress!
+      
+      return ed25519_is_on_curve(p) == 1
+    }
   }
     
   private static func randomNonce() throws -> Data {
