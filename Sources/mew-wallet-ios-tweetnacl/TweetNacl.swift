@@ -335,7 +335,7 @@ public class TweetNacl {
   /// - Parameter publicKey: The Ed25519 public key
   /// - Returns: `true` if the key is on curve; otherwise, `false`.
   public static func isOnCurve(publicKey: Data) throws -> Bool {
-    guard publicKey.count == Constants.Sign.publicKeyLength else { throw TweetNaclError.invalidKey }
+    guard publicKey.count == Constants.Sign.publicKeyLength else { throw TweetNaclError.invalidPublicKey }
     return publicKey.withUnsafeBytes { rawPtr -> Bool in
       let p = rawPtr.bindMemory(to: UInt8.self).baseAddress!
       
