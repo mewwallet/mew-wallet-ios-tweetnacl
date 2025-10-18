@@ -14,11 +14,18 @@ struct Constants {
   static let SecretKeyLength = 32
   static let BeforeNMLength = 32
   
-  struct SecretBox {
+  enum SecretBox {
     static let keyLength = 32
     static let nonceLength = 24
     static let zeroLength = 32
     static let boxZeroLength = 16
+  }
+  
+  enum Sign {
+    static let signatureLength = 64
+    static let publicKeyLength = 32
+    static let secretKeyLength = 64
+    static let seedLength = 32
   }
 }
 
@@ -27,6 +34,7 @@ public enum TweetNaclError: LocalizedError {
   case invalidPublicKey
   case invalidKey
   case invalidNonce
+  case invalidSeed
   case tweetNacl(String)
   
   public var errorDescription: String? {
@@ -35,6 +43,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey: return "Wrong PublicKey length"
     case .invalidKey:       return "Wrong Key length"
     case .invalidNonce:     return "Wrong Nonce length"
+    case .invalidSeed:      return "Wrong Seed length"
     case .tweetNacl:        return "Internal TweetNacl error"
     }
   }
@@ -45,6 +54,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey:       return "PublicKey should be \(Constants.PublicKeyLength) bytes length"
     case .invalidKey:             return "Key should be \(Constants.SecretBox.keyLength) bytes length"
     case .invalidNonce:           return "Nonce should be \(Constants.SecretBox.nonceLength) bytes length"
+    case .invalidSeed:            return "Seed should be \(Constants.Sign.seedLength) bytes length"
     case let .tweetNacl(message): return "TweetNacl error: \(message)"
     }
   }
@@ -55,6 +65,7 @@ public enum TweetNaclError: LocalizedError {
     case .invalidPublicKey: return "Check PublicKey length"
     case .invalidKey:       return "Check Key length"
     case .invalidNonce:     return "Check Nonce length"
+    case .invalidSeed:      return "Check Seed length"
     case .tweetNacl:        return "Internal TweetNacl error"
     }
   }
@@ -64,7 +75,6 @@ public enum TweetNaclError: LocalizedError {
   }
 }
 
-// Based on https://github.com/dchest/tweetnacl-js
 public class TweetNacl {
   
   // MARK: - Keys
@@ -92,6 +102,44 @@ public class TweetNacl {
     guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.keyPair] Internal error code: \(result)") }
     return (Data(pk), Data(sk))
   }
+  
+  /// Generates an Ed25519 key pair from a given seed.
+  ///
+  /// This method uses the TweetNaCl implementation (`crypto_sign_ed25519_tweet_keypair`) to create
+  /// a public/secret key pair suitable for Ed25519 signing operations.
+  /// The provided seed must be exactly `Constants.Sign.seedLength` bytes long.
+  ///
+  /// - Parameters:
+  ///   - seed: The seed data from which the key pair will be derived.
+  ///     Must be `Constants.Sign.seedLength` bytes.
+  ///
+  /// - Returns:
+  ///   A tuple containing:
+  ///   - `publicKey`: The Ed25519 public key (`Constants.Sign.publicKeyLength` bytes).
+  ///   - `secretKey`: The Ed25519 secret key (`Constants.Sign.secretKeyLength` bytes).
+  ///
+  /// - Throws:
+  ///   - `TweetNaclError.invalidSeed` if the seed length is invalid.
+  ///   - `TweetNaclError.tweetNacl` if the underlying `crypto_sign_ed25519_tweet_keypair` function fails.
+  ///
+  /// - Note:
+  ///   The generated keys are suitable for use with the `sign` and `verify` methods in this API.
+  public static func signKeyPair(seed: Data) throws -> (publicKey: Data, secretKey: Data) {
+    guard seed.count == Constants.Sign.seedLength else {
+      throw TweetNaclError.invalidSeed
+    }
+    var sk: [UInt8] = [UInt8](repeating: 0, count: Constants.Sign.secretKeyLength)
+    var pk: [UInt8] = [UInt8](repeating: 0, count: Constants.Sign.publicKeyLength)
+    
+    sk.replaceSubrange(0..<Constants.Sign.publicKeyLength, with: seed[0..<Constants.Sign.publicKeyLength])
+    
+    let result = crypto_sign_ed25519_tweet_keypair(&pk, &sk)
+    guard result == 0 else {
+      throw TweetNaclError.tweetNacl("Internal error")
+    }
+    
+    return (Data(pk), Data(sk))
+  }
     
   /// Pre-calculate shared secret key
   /// Based on nacl.box.before
@@ -111,6 +159,94 @@ public class TweetNacl {
     guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.before] Internal error code: \(result)") }
       
     return Data(k)
+  }
+  
+  // MARK: - Sign
+  
+  /// Signs a message using the Ed25519 signature scheme.
+  ///
+  /// This method uses the TweetNaCl implementation (`crypto_sign_ed25519_tweet`) to generate a
+  /// deterministic Ed25519 signature for the provided message using the given secret key.
+  ///
+  /// - Parameters:
+  ///   - message: The message data to sign.
+  ///   - secretKey: The Ed25519 secret key (must be `Constants.Sign.secretKeyLength` bytes long).
+  ///   - onlySignature: If `true` (default), returns only the signature bytes. If `false`,
+  ///     returns the concatenation of the signature and the original message.
+  ///
+  /// - Returns:
+  ///   A `Data` object containing either:
+  ///   - The Ed25519 signature (`Constants.Sign.signatureLength` bytes) if `onlySignature` is `true`.
+  ///   - The signature followed by the message (`signatureLength + message.count` bytes) if `onlySignature` is `false`.
+  ///
+  /// - Throws:
+  ///   - `TweetNaclError.invalidSecretKey` if the `secretKey` length is invalid.
+  ///   - `TweetNaclError.tweetNacl` if the underlying `crypto_sign_ed25519_tweet` function fails.
+  ///
+  /// - Note:
+  ///   This method produces deterministic signatures — the same message and secret key will
+  ///   always yield the same signature.
+  public static func sign(message: Data, secretKey: Data, onlySignature: Bool = true) throws -> Data {
+    guard secretKey.count == Constants.Sign.secretKeyLength else { throw TweetNaclError.invalidSecretKey }
+    
+    var signedMessage = [UInt8](repeating: 0x00, count: Constants.Sign.signatureLength + message.count)
+    var length: UInt64 = 0
+    var secretKey = [UInt8](secretKey)
+    var message = [UInt8](message)
+    
+    let result = crypto_sign_ed25519_tweet(&signedMessage, &length, &message, UInt64(message.count), &secretKey)
+    guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.sign] Internal error code: \(result)") }
+    if onlySignature {
+      return Data(signedMessage[0..<Constants.Sign.signatureLength])
+    } else {
+      return Data(signedMessage)
+    }
+  }
+  
+  /// Verifies a message using the Ed25519 signature scheme.
+  /// 
+  /// This method uses the TweetNaCl implementation (`crypto_sign_ed25519_tweet_open`)
+  /// to verify a detached Ed25519 signature against the provided message and public key.
+  /// 
+  /// The verification succeeds if:
+  /// - The signature length is exactly `Constants.Sign.signatureLength` bytes.
+  /// - The public key length is exactly `Constants.Sign.publicKeyLength` bytes.
+  /// - `crypto_sign_ed25519_tweet_open` successfully recovers the original message from the
+  ///   concatenated signature and message bytes.
+  /// - The recovered message exactly matches the provided message.
+  /// 
+  /// - Parameters:
+  ///   - message: The message data to verify.
+  ///   - signature: The Ed25519 signature to verify (`Constants.Sign.signatureLength` bytes).
+  ///   - publicKey: The Ed25519 public key associated with the signature
+  ///                (`Constants.Sign.publicKeyLength` bytes).
+  /// 
+  /// - Returns: `true` if the signature is valid for the given message and public key; otherwise, `false`.
+  /// 
+  /// - Note:
+  ///   This function expects a *detached* Ed25519 signature (signature and message are provided separately),
+  ///   but internally uses `crypto_sign_ed25519_tweet_open`, which operates on a
+  ///   "signature || message" concatenation, to perform the verification.
+  public static func verify(message: Data, signature: Data, publicKey: Data) -> Bool {
+    guard signature.count == Constants.Sign.signatureLength,
+          publicKey.count == Constants.Sign.publicKeyLength else { return false }
+    
+    var publicKey = [UInt8](publicKey)
+    let message = [UInt8](message)
+    let signature = [UInt8](signature)
+    
+    // signature || message
+    var signedMessage = signature + message
+    
+    // recovered must be at least signedMessage.count bytes
+    var recovered = [UInt8](repeating: 0, count: signedMessage.count)
+    var length: UInt64 = 0
+    
+    let result = crypto_sign_ed25519_tweet_open(&recovered, &length, &signedMessage, UInt64(signedMessage.count), &publicKey)
+    
+    // Valid if open() returns 0 AND recovered message matches input
+    guard result == 0, Int(length) == message.count else { return false }
+    return recovered.prefix(Int(length)).elementsEqual(message)
   }
     
   // MARK: - Decryption
@@ -192,6 +328,19 @@ public class TweetNacl {
     guard result == 0 else { throw TweetNaclError.tweetNacl("[TweetNacl.secretbox] Internal error code: \(result)") }
     
     return Data(c[Constants.SecretBox.boxZeroLength..<c.count])
+  }
+  
+  /// Checks that Ed25519 public key encodes a valid point on Edwards25519.
+  /// Returns `true` iff the 32-byte key decodes successfully.
+  /// - Parameter publicKey: The Ed25519 public key
+  /// - Returns: `true` if the key is on curve; otherwise, `false`.
+  public static func isOnCurve(publicKey: Data) throws -> Bool {
+    guard publicKey.count == Constants.Sign.publicKeyLength else { throw TweetNaclError.invalidPublicKey }
+    return publicKey.withUnsafeBytes { rawPtr -> Bool in
+      let p = rawPtr.bindMemory(to: UInt8.self).baseAddress!
+      
+      return ed25519_is_on_curve(p) == 1
+    }
   }
     
   private static func randomNonce() throws -> Data {
