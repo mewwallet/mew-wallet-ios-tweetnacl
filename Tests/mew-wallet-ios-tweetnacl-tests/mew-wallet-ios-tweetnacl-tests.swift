@@ -105,7 +105,7 @@ struct mew_wallet_ios_tweetnacl {
         try TweetNacl.isOnCurve(publicKey: short)
       })
       #expect(throws: TweetNaclError.self, performing: {
-        try #expect(TweetNacl.isOnCurve(publicKey: long)  == false)
+        try TweetNacl.isOnCurve(publicKey: long)
       })
     }
     
